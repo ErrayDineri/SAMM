@@ -1,0 +1,69 @@
+{
+  "kits": [
+    {
+      "id": "depart_moteur_triphase",
+      "nom": "Départ moteur triphasé",
+      "alias": [
+        "demarrage moteur triphase",
+        "demarrer un moteur triphase",
+        "depart moteur",
+        "creer un depart moteur"
+      ],
+      "pieces": [
+        "moteur triphasé",
+        "contacteur",
+        "protection moteur",
+        "relais thermique",
+        "disjoncteur moteur"
+      ]
+    },
+    {
+      "id": "armoire_electrique_automatique",
+      "nom": "Armoire électrique automatique",
+      "alias": [
+        "armoire automate",
+        "armoire de commande automatique",
+        "creer une armoire electrique"
+      ],
+      "pieces": [
+        "automate",
+        "alimentation 24V",
+        "relais interface",
+        "bornier",
+        "disjoncteur"
+      ]
+    },
+    {
+      "id": "eclairage_industriel",
+      "nom": "Éclairage industriel",
+      "alias": [
+        "circuit eclairage",
+        "installation eclairage atelier",
+        "eclairage entrepot"
+      ],
+      "pieces": [
+        "disjoncteur",
+        "contacteur jour nuit",
+        "luminaire industriel",
+        "détecteur de présence"
+      ]
+    },
+    {
+      "id": "demarrage_etoile_triangle",
+      "nom": "Démarrage étoile triangle",
+      "alias": [
+        "demarreur etoile triangle",
+        "montage etoile triangle"
+      ],
+      "pieces": [
+        "moteur triphasé",
+        "contacteur",
+        "contacteur étoile",
+        "contacteur triangle",
+        "relais temporisé",
+        "relais thermique",
+        "disjoncteur moteur"
+      ]
+    }
+  ]
+}

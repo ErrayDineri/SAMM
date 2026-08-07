@@ -4,6 +4,7 @@ import textwrap
 
 from llm import analyser_besoin
 from stock import Stock
+from kits import charger_kits, rechercher_kit, ajouter_kit
 
 
 # -------------------------
@@ -195,6 +196,18 @@ if "selection" not in st.session_state:
     st.session_state.selection = None
 
 
+if "source_pieces" not in st.session_state:
+    st.session_state.source_pieces = None
+
+
+if "kit_utilise" not in st.session_state:
+    st.session_state.kit_utilise = None
+
+
+if "derniere_question" not in st.session_state:
+    st.session_state.derniere_question = ""
+
+
 
 # -------------------------
 # Header
@@ -242,13 +255,37 @@ if lancer_recherche:
             "Analyse du besoin..."
         ):
 
+            # 1) On cherche d'abord si un kit connu correspond déjà
+            #    à ce besoin (recherche floue sur le nom/alias du kit).
+            #    Si oui : résultat instantané, sans appel au LLM.
+            kits_disponibles = charger_kits()
 
-            pieces = analyser_besoin(
-                question
+            kit_trouve = rechercher_kit(
+                question,
+                kits_disponibles
             )
+
+            if kit_trouve:
+
+                pieces = kit_trouve["pieces"]
+
+                st.session_state.source_pieces = "kit"
+                st.session_state.kit_utilise = kit_trouve["nom"]
+
+            else:
+
+                # 2) Aucun kit ne correspond : on retombe sur
+                #    l'analyse par l'IA, comme avant.
+                pieces = analyser_besoin(
+                    question
+                )
+
+                st.session_state.source_pieces = "ia"
+                st.session_state.kit_utilise = None
 
 
             st.session_state.pieces = pieces
+            st.session_state.derniere_question = question
 
 
             resultats = {}
@@ -266,6 +303,62 @@ if lancer_recherche:
             st.session_state.resultats = resultats
 
             st.session_state.selection = None
+
+
+
+# -------------------------
+# Indicateur de source (kit connu vs analyse IA)
+# -------------------------
+
+if st.session_state.pieces:
+
+    if st.session_state.source_pieces == "kit":
+
+        st.success(
+            f"⚡ Kit reconnu : **{st.session_state.kit_utilise}** "
+            "— résultat instantané, sans appel à l'IA."
+        )
+
+    elif st.session_state.source_pieces == "ia":
+
+        st.info(
+            "🤖 Besoin inédit : analysé par l'IA "
+            "(aucun kit existant ne correspondait)."
+        )
+
+        with st.expander(
+            "💾 Enregistrer ce besoin comme kit pour la prochaine fois"
+        ):
+
+            nom_kit = st.text_input(
+                "Nom du kit",
+                value=st.session_state.derniere_question.strip().capitalize(),
+                key="nom_nouveau_kit"
+            )
+
+            if st.button(
+                "Enregistrer le kit",
+                key="enregistrer_kit"
+            ):
+
+                if nom_kit.strip():
+
+                    ajouter_kit(
+                        nom_kit.strip(),
+                        st.session_state.pieces,
+                        alias=[st.session_state.derniere_question.strip()]
+                    )
+
+                    st.success(
+                        f"Kit « {nom_kit.strip()} » enregistré ! "
+                        "Il sera reconnu instantanément la prochaine fois."
+                    )
+
+                else:
+
+                    st.warning(
+                        "Veuillez donner un nom au kit avant d'enregistrer."
+                    )
 
 
 
