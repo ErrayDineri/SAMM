@@ -7,7 +7,25 @@ LM_STUDIO_URL = "http://localhost:1234/api/v1/chat"
 MODEL = "qwen3.5-4b"
 
 
-def appeler_llm(prompt):
+# Mettre à False pour couper l'affichage de debug dans le terminal.
+DEBUG = True
+
+
+def _debug(titre, contenu):
+
+    if not DEBUG:
+        return
+
+    print("\n" + "=" * 70)
+    print(f"[DEBUG] {titre}")
+    print("=" * 70)
+    print(contenu)
+    print("=" * 70 + "\n")
+
+
+def appeler_llm(prompt, max_output_tokens=300):
+
+    _debug("PROMPT ENVOYÉ AU LLM", prompt)
 
     response = requests.post(
         LM_STUDIO_URL,
@@ -18,12 +36,17 @@ def appeler_llm(prompt):
             "reasoning": "off",
             "stream": False,
             "store": False,
-            "max_output_tokens": 300
+            "max_output_tokens": max_output_tokens
         },
         timeout=120
     )
 
     data = response.json()
+
+    _debug(
+        "RÉPONSE BRUTE DE LM STUDIO",
+        json.dumps(data, indent=2, ensure_ascii=False)
+    )
 
     if "error" in data:
         raise Exception(
@@ -39,11 +62,47 @@ def extraire_message(data):
     for item in data.get("output", []):
 
         if item.get("type") == "message":
+
+            _debug("TEXTE EXTRAIT DU MESSAGE", item["content"])
+
             return item["content"]
 
     raise Exception(
         "Aucun message retourné par LM Studio"
     )
+
+
+
+def _parser_json(texte, contexte=""):
+    """
+    Nettoie et parse le JSON renvoyé par le LLM. En cas d'échec, affiche
+    le texte brut reçu dans le terminal avant de relancer l'erreur, pour
+    faciliter le débogage (JSON tronqué, mal formé, texte parasite...).
+    """
+
+    texte_nettoye = (
+        texte
+        .replace("```json", "")
+        .replace("```", "")
+        .strip()
+    )
+
+    _debug(
+        f"JSON À PARSER{' (' + contexte + ')' if contexte else ''}",
+        texte_nettoye
+    )
+
+    try:
+        return json.loads(texte_nettoye)
+
+    except json.JSONDecodeError as erreur:
+
+        _debug(
+            "ÉCHEC DU PARSING JSON",
+            f"Erreur : {erreur}\n\nTexte reçu :\n{texte_nettoye}"
+        )
+
+        raise
 
 
 
@@ -120,15 +179,7 @@ Demande utilisateur :
     texte = extraire_message(data)
 
 
-    texte = (
-        texte
-        .replace("```json", "")
-        .replace("```", "")
-        .strip()
-    )
-
-
-    resultat = json.loads(texte)
+    resultat = _parser_json(texte, contexte="analyser_besoin")
 
 
     return resultat["pieces"]
@@ -211,14 +262,7 @@ Demande utilisateur :
 
     texte = extraire_message(data)
 
-    texte = (
-        texte
-        .replace("```json", "")
-        .replace("```", "")
-        .strip()
-    )
-
-    resultat = json.loads(texte)
+    resultat = _parser_json(texte, contexte="analyser_besoin_avec_kits")
 
     kit_choisi = resultat.get("kit_choisi")
 
@@ -229,4 +273,94 @@ Demande utilisateur :
 
     pieces = resultat.get("pieces", [])
 
+    _debug(
+        "RÉSULTAT analyser_besoin_avec_kits",
+        f"kit_choisi = {kit_choisi}\npieces = {pieces}"
+    )
+
     return kit_choisi, pieces
+
+
+
+def _decrire_pieces(pieces):
+
+    return "\n".join(
+        f'- "{piece}"'
+        for piece in pieces
+    )
+
+
+
+def selectionner_references_pour_pieces(pieces, noms_complets):
+    """
+    Demande à l'IA de faire correspondre chaque pièce identifiée à un
+    ou plusieurs noms de produits existant réellement dans le stock
+    (colonne "nom_complet"), plutôt que de comparer des vecteurs
+    d'embedding.
+
+    Retourne un dict : { piece: [nom_le_plus_pertinent, ...], ... }
+    Les listes de noms sont classées du plus pertinent au moins
+    pertinent ; une liste vide signifie qu'aucun nom ne correspond.
+
+    NOTE : si le catalogue de noms est très volumineux (plusieurs
+    centaines/milliers de lignes), le prompt peut dépasser la fenêtre
+    de contexte du modèle local. Dans ce cas, il faudra pré-filtrer ou
+    découper la liste de noms avant de l'envoyer (par lots), plutôt
+    que de tout envoyer en un seul appel comme ici.
+    """
+
+    if not pieces:
+        return {}
+
+    noms_texte = "\n".join(
+        f"- {nom}"
+        for nom in noms_complets
+    )
+
+    pieces_texte = _decrire_pieces(pieces)
+
+    prompt = f"""
+
+Tu es un expert en composants électriques et en automatisme industriel.
+
+Voici la liste EXACTE des noms de produits disponibles en stock (un par
+ligne) :
+
+{noms_texte}
+
+Voici la liste des composants recherchés :
+
+{pieces_texte}
+
+Pour CHAQUE composant recherché, identifie parmi la liste de noms
+ci-dessus ceux qui correspondent le mieux. Recopie les noms EXACTEMENT
+tels qu'ils apparaissent dans la liste, sans les modifier ni en
+inventer de nouveaux qui n'y figurent pas. Classe-les du plus pertinent
+au moins pertinent. Si aucun nom ne correspond à un composant, laisse
+une liste vide pour celui-ci.
+
+Retourne uniquement du JSON valide, au format :
+
+{{
+ "correspondances": {{
+    "nom du composant 1": ["nom le plus pertinent", "nom suivant"],
+    "nom du composant 2": []
+ }}
+}}
+
+"""
+
+    data = appeler_llm(prompt, max_output_tokens=900)
+
+    texte = extraire_message(data)
+
+    texte = (
+        texte
+        .replace("```json", "")
+        .replace("```", "")
+        .strip()
+    )
+
+    resultat = json.loads(texte)
+
+    return resultat.get("correspondances", {})

@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import textwrap
 
-from llm import analyser_besoin_avec_kits
+from llm import analyser_besoin_avec_kits, selectionner_references_pour_pieces
 from stock import Stock
 from kits import charger_kits, ajouter_kit
 
@@ -255,9 +255,10 @@ if lancer_recherche:
             "Analyse du besoin..."
         ):
 
-            # L'IA reçoit la liste des kits connus et choisit elle-même
-            # celui qui correspond le mieux, ou propose directement une
-            # liste de pièces si aucun kit ne convient.
+            # 1) L'IA reçoit la liste des kits connus et choisit
+            #    elle-même celui qui correspond le mieux, ou propose
+            #    directement une liste de pièces si aucun kit ne
+            #    convient.
             kits_disponibles = charger_kits()
 
             kit_choisi_id, pieces_ia = analyser_besoin_avec_kits(
@@ -292,15 +293,26 @@ if lancer_recherche:
             st.session_state.derniere_question = question
 
 
-            resultats = {}
+            # 2) Pour chaque pièce identifiée, l'IA choisit directement
+            #    parmi les noms de produits réellement présents en
+            #    stock (colonne "nom_complet") ceux qui correspondent
+            #    le mieux, plutôt qu'une recherche par embeddings.
+            noms_disponibles = stock.noms_complets_uniques()
 
+            correspondances = selectionner_references_pour_pieces(
+                pieces,
+                noms_disponibles
+            )
+
+            resultats = {}
 
             for piece in pieces:
 
-                resultats[piece] = (
-                    stock.rechercher(
-                        piece
-                    )
+                noms_choisis = correspondances.get(piece, [])
+
+                resultats[piece] = stock.rechercher_par_noms(
+                    piece,
+                    noms_choisis
                 )
 
 

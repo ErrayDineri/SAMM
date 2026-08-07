@@ -1,19 +1,9 @@
-import hashlib
 import os
 
-import numpy as np
 import pandas as pd
 
-from embeddings import (
-    obtenir_embeddings,
-    obtenir_embedding,
-    similarite_cosinus,
-    texte_requete,
-    texte_passage
-)
 
-
-FICHIER_CACHE_EMBEDDINGS = "embeddings_cache.npz"
+FICHIER_NOMS_UNIQUES = "uniques_tries.txt"
 
 
 class Stock:
@@ -34,59 +24,6 @@ class Stock:
         self.df = self.df[colonnes]
         self.df = self.df.fillna("")
 
-        self.embeddings = self._charger_ou_calculer_embeddings()
-
-
-    def _empreinte_donnees(self):
-        """
-        Calcule une empreinte du contenu (ref + nom_complet) afin de
-        savoir si le cache d'embeddings est encore valide, ou si le
-        fichier de stock a changé depuis le dernier calcul (auquel cas
-        il faut recalculer les embeddings).
-        """
-
-        contenu = "".join(
-            f"{ref}|{nom}"
-            for ref, nom in zip(
-                self.df["ref"],
-                self.df["nom_complet"]
-            )
-        )
-
-        return hashlib.sha256(contenu.encode("utf-8")).hexdigest()
-
-
-    def _charger_ou_calculer_embeddings(self):
-
-        empreinte = self._empreinte_donnees()
-
-        if os.path.exists(FICHIER_CACHE_EMBEDDINGS):
-
-            cache = np.load(FICHIER_CACHE_EMBEDDINGS, allow_pickle=True)
-
-            if str(cache["empreinte"]) == empreinte:
-                return cache["embeddings"]
-
-        # Cache absent ou périmé : on encode tous les "nom_complet"
-        # avec le modèle e5-large (calcul local, peut prendre du temps
-        # selon la taille du stock, mais ne se refait qu'une fois).
-        textes = [
-            texte_passage(nom)
-            for nom in self.df["nom_complet"]
-        ]
-
-        vecteurs = np.array(
-            obtenir_embeddings(textes)
-        )
-
-        np.savez(
-            FICHIER_CACHE_EMBEDDINGS,
-            embeddings=vecteurs,
-            empreinte=empreinte
-        )
-
-        return vecteurs
-
 
     def _quantite(self, valeur):
 
@@ -96,33 +33,70 @@ class Stock:
             return 0
 
 
-    def rechercher(self, besoin, limite=None, seuil=0.80):
+    def noms_complets_uniques(self, fichier=FICHIER_NOMS_UNIQUES):
         """
-        Recherche les references du stock dont le "nom_complet" est
-        semantiquement proche du besoin, via similarite cosinus entre
-        embeddings e5-large (au lieu d'une correspondance de caracteres).
+        Retourne la liste des noms de produits uniques ("nom_complet")
+        à proposer à l'IA pour la mise en correspondance.
 
-        Le seuil est a calibrer avec des donnees reelles : les scores de
-        similarite e5 sont generalement plus resserres qu'un score de
-        correspondance de texte (ex : 0.75-0.95 pour des elements lies).
+        Si un fichier pré-généré existe (ex: uniques_tries.txt, une
+        liste déjà déduplicable et triée), on l'utilise en priorité :
+        cela garantit la cohérence avec un éventuel nettoyage externe
+        des libellés. Sinon, on déduit la liste directement du stock
+        chargé en mémoire.
         """
 
-        vecteur_besoin = np.array(
-            obtenir_embedding(
-                texte_requete(besoin)
-            )
-        )
+        if os.path.exists(fichier):
+
+            with open(fichier, "r", encoding="utf-8") as f:
+                noms = [
+                    ligne.strip()
+                    for ligne in f
+                    if ligne.strip()
+                ]
+
+            if noms:
+                return noms
+
+        noms = sorted(set(
+            str(nom).strip()
+            for nom in self.df["nom_complet"]
+            if str(nom).strip()
+        ))
+
+        return noms
+
+
+    def rechercher_par_noms(self, besoin, noms_choisis, limite=None):
+        """
+        Retourne toutes les lignes du stock dont le "nom_complet"
+        correspond à l'un des noms choisis par l'IA pour ce besoin,
+        en respectant l'ordre de pertinence qu'elle a donné (le champ
+        "score" reflète ce rang, pas une mesure de similarité
+        mathématique comme avec les embeddings).
+        """
+
+        if not noms_choisis:
+            return []
+
+        rang_par_nom = {
+            nom.strip().lower(): index
+            for index, nom in enumerate(noms_choisis)
+        }
 
         resultats = []
 
-        for index, ligne in self.df.iterrows():
+        for _, ligne in self.df.iterrows():
 
-            score = similarite_cosinus(
-                vecteur_besoin,
-                self.embeddings[index]
-            )
+            nom_ligne = str(ligne["nom_complet"]).strip().lower()
 
-            if score >= seuil:
+            if nom_ligne in rang_par_nom:
+
+                rang = rang_par_nom[nom_ligne]
+
+                # Score décroissant selon le rang de pertinence donné
+                # par l'IA (100 pour le choix le plus pertinent, puis
+                # -10 par rang, avec un plancher à 10).
+                score = max(100 - rang * 10, 10)
 
                 resultats.append({
 
@@ -147,7 +121,7 @@ class Stock:
                         ligne["nom_complet"],
 
                     "score":
-                        round(score * 100, 1)
+                        score
                 })
 
 

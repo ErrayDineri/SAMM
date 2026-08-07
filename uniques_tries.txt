@@ -57,9 +57,9 @@ Connecteur Screw Terminal NI PXI-2527
 Connecteur blindé
 Connecteur bloc CB-50
 Connecteur mâle 37 positions
-Connecteur électrique
 Connecteurs Sub-D
 Connecteurs électriques
+Contacteur
 Contrôleur
 Convertisseurs DC DC isolés
 Cord NBR 70
@@ -75,6 +75,7 @@ Câble réseau Siemens
 Câble série 150 mètres
 Câbles divers
 Câbles et fils divers
+Disjoncteur
 Douille centrage
 DéTECTEUR SOOE-KS-L-PNLK-T
 Débogueur PICkit 2
@@ -240,7 +241,6 @@ Vérins de guidage pneumatiques
 Éléments FHC
 Éléments de fixation
 Éprouvette de test
-Équipements de protection Schneider Electric
 Étagère coulissante universelle
 Étau à clé
 Étau à vis
