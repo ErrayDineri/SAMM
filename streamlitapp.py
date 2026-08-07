@@ -2,9 +2,9 @@ import streamlit as st
 import json
 import textwrap
 
-from llm import analyser_besoin
+from llm import analyser_besoin_avec_kits
 from stock import Stock
-from kits import charger_kits, rechercher_kit, ajouter_kit
+from kits import charger_kits, ajouter_kit
 
 
 # -------------------------
@@ -172,7 +172,7 @@ st.markdown(
 def charger_stock():
 
     return Stock(
-        "stock.xlsx"
+        "named_stock.xlsx"
     )
 
 
@@ -255,30 +255,34 @@ if lancer_recherche:
             "Analyse du besoin..."
         ):
 
-            # 1) On cherche d'abord si un kit connu correspond déjà
-            #    à ce besoin (recherche floue sur le nom/alias du kit).
-            #    Si oui : résultat instantané, sans appel au LLM.
+            # L'IA reçoit la liste des kits connus et choisit elle-même
+            # celui qui correspond le mieux, ou propose directement une
+            # liste de pièces si aucun kit ne convient.
             kits_disponibles = charger_kits()
 
-            kit_trouve = rechercher_kit(
+            kit_choisi_id, pieces_ia = analyser_besoin_avec_kits(
                 question,
                 kits_disponibles
             )
 
-            if kit_trouve:
+            kit_choisi = next(
+                (
+                    k for k in kits_disponibles
+                    if k["id"] == kit_choisi_id
+                ),
+                None
+            )
 
-                pieces = kit_trouve["pieces"]
+            if kit_choisi:
+
+                pieces = kit_choisi["pieces"]
 
                 st.session_state.source_pieces = "kit"
-                st.session_state.kit_utilise = kit_trouve["nom"]
+                st.session_state.kit_utilise = kit_choisi["nom"]
 
             else:
 
-                # 2) Aucun kit ne correspond : on retombe sur
-                #    l'analyse par l'IA, comme avant.
-                pieces = analyser_besoin(
-                    question
-                )
+                pieces = pieces_ia
 
                 st.session_state.source_pieces = "ia"
                 st.session_state.kit_utilise = None
@@ -315,8 +319,8 @@ if st.session_state.pieces:
     if st.session_state.source_pieces == "kit":
 
         st.success(
-            f"⚡ Kit reconnu : **{st.session_state.kit_utilise}** "
-            "— résultat instantané, sans appel à l'IA."
+            f"⚡ Kit choisi par l'IA : **{st.session_state.kit_utilise}** "
+            "— pièces déjà validées, réutilisées telles quelles."
         )
 
     elif st.session_state.source_pieces == "ia":
