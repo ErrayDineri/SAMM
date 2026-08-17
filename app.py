@@ -7,7 +7,7 @@ from stock import Stock
 
 
 DOSSIER_PROJET = Path(__file__).resolve().parent
-FICHIER_STOCK = DOSSIER_PROJET / "stock.xlsx"
+FICHIER_STOCK = DOSSIER_PROJET / "stockfinal.xlsx"
 
 
 def construire_resultat(

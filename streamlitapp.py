@@ -172,7 +172,7 @@ st.markdown(
 def charger_stock():
 
     return Stock(
-        "named_stock.xlsx"
+        "stockfinal.xlsx"
     )
 
 
