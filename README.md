@@ -9,30 +9,6 @@ invendus de stock.
 
 ---
 
-## ⚠️ À vérifier avant de lancer l'appli
-
-`streamlitapp.py` charge actuellement :
-
-```python
-@st.cache_resource
-def charger_stock():
-    return Stock("named_stock.xlsx")
-```
-
-Or **`named_stock.xlsx` a des `ref` regroupées/filtrées** (transformées par
-`filtre_stock.py`), pas les références d'origine. Le fichier destiné à
-l'appli est **`stock_avec_nom_complet.xlsx`**, produit par
-`fusionner_nom_complet.py`, qui contient les `ref` **intactes** + la
-colonne `nom_complet`. Pense à changer cette ligne avant utilisation réelle :
-
-```python
-return Stock("stock_avec_nom_complet.xlsx")
-```
-
-(voir la section [Pipeline de préparation des données](#pipeline-de-préparation-des-données) pour comprendre pourquoi).
-
----
-
 ## Sommaire
 
 - [Architecture](#architecture)
